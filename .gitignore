@@ -62,6 +62,9 @@ data/vector_store_backup_*/
 *.bak
 *_backup.txt
 
+# Archive folder (old experimental files)
+archive/
+
 # Temporary files
 temp/
 tmp/
