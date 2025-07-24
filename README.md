@@ -1,4 +1,4 @@
-# Project Management RAG System
+# llm_rag_project
 
 A Flask-based Retrieval-Augmented Generation (RAG) system for Project Management knowledge using LangChain and Llama models.
 
@@ -22,4 +22,3 @@ A Flask-based Retrieval-Augmented Generation (RAG) system for Project Management
 - `rebuild_vector_db.py` - Vector store management
 - `requirements.txt` - Python dependencies
 - `data/` - Document storage and vector store
-
