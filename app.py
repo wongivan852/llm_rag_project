@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 import os
 import json
 import time
@@ -10,6 +10,7 @@ import re
 # Configuration
 DATA_PATH = "data/pmp_combined.txt"
 MODEL_PATH = "models/llama-3.2-3b-instruct-q4_k_m.gguf"
+FALLBACK_MODEL_PATH = "models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 VECTOR_STORE_PATH = "data/vector_store"
 LOGS_PATH = "logs"
 
@@ -206,8 +207,12 @@ class ProjectManagementRAG:
                 initialization_error = error_msg
                 return False
             
-            # Initialize LLM with robust settings
-            print("🧠 Initializing Llama 3.2 3B model...")
+            # Initialize LLM with robust settings and fallback
+            print("🧠 Initializing Llama model...")
+            model_to_use = MODEL_PATH
+            model_name = "Llama 3.2 3B"
+            
+            # Try primary model first
             try:
                 self.llm = LlamaCpp(
                     model_path=MODEL_PATH,
@@ -217,13 +222,30 @@ class ProjectManagementRAG:
                     verbose=False,        # Reduce noise
                     stop=["Human:", "Assistant:", "\n\nQuestion:", "\n\nAnswer:"]
                 )
-                print("✅ Llama 3.2 3B initialized successfully")
+                print(f"✅ {model_name} initialized successfully")
                 
             except Exception as e:
-                error_msg = f"Failed to initialize Llama model: {e}"
-                print(f"ERROR: {error_msg}")
-                initialization_error = error_msg
-                return False
+                print(f"⚠️ Primary model failed: {e}")
+                print("🔄 Trying fallback model...")
+                
+                # Try fallback model
+                try:
+                    self.llm = LlamaCpp(
+                        model_path=FALLBACK_MODEL_PATH,
+                        temperature=0.1,
+                        max_tokens=512,       # Smaller model, smaller context
+                        n_ctx=2048,
+                        verbose=False,
+                        stop=["Human:", "Assistant:", "\n\nQuestion:", "\n\nAnswer:"]
+                    )
+                    model_name = "TinyLlama 1.1B"
+                    print(f"✅ {model_name} (fallback) initialized successfully")
+                    
+                except Exception as fallback_error:
+                    error_msg = f"Failed to initialize both primary and fallback models. Primary: {e}, Fallback: {fallback_error}"
+                    print(f"ERROR: {error_msg}")
+                    initialization_error = error_msg
+                    return False
             
             total_time = time.time() - start_time
             print(f"🎉 RAG system initialized successfully in {total_time:.2f} seconds!")
@@ -437,6 +459,21 @@ threading.Thread(target=initialize_system, daemon=True).start()
 # Flask routes
 @app.route('/')
 def home():
+    """Serve the main HTML interface"""
+    try:
+        return send_file('rag-interface.html')
+    except Exception as e:
+        return jsonify({
+            "error": f"Could not load interface: {e}",
+            "status": "Project Management RAG API", 
+            "initialized": is_initialized,
+            "model": "Llama 3.2 3B Instruct",
+            "llamacpp_available": LLAMACPP_AVAILABLE
+        })
+
+@app.route('/api/info')
+def api_info():
+    """API information endpoint"""
     return jsonify({
         "status": "Project Management RAG API", 
         "initialized": is_initialized,
@@ -529,7 +566,8 @@ def get_audit():
 
 if __name__ == '__main__':
     print("🚀 Starting Project Management RAG Server")
-    print(f"📂 Model path: {MODEL_PATH}")
+    print(f"📂 Primary model: {MODEL_PATH}")
+    print(f"📂 Fallback model: {FALLBACK_MODEL_PATH}")
     print(f"📂 Data path: {DATA_PATH}")
     print(f"🌐 Server will run at: http://localhost:8081")
     print("-" * 50)
